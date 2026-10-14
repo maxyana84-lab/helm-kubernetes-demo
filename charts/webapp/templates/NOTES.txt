@@ -1,0 +1,5 @@
+Release {{ .Release.Name }} installed in namespace {{ .Release.Namespace }}.
+
+Access the app locally:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "webapp.fullname" . }} 8080:{{ .Values.service.port }}
+  then open http://localhost:8080

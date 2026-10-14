@@ -1,0 +1,17 @@
+replicaCount: 3
+config:
+  message: "Environment: prod"
+ingress:
+  enabled: true
+  host: webapp.example.com
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi

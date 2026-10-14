@@ -1,0 +1,45 @@
+name: helm-ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint-and-template:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Helm lint (default, dev, prod values)
+        run: |
+          helm lint charts/webapp
+          helm lint charts/webapp -f charts/webapp/values-dev.yaml
+          helm lint charts/webapp -f charts/webapp/values-prod.yaml
+      - name: Helm template (render manifests)
+        run: |
+          helm template demo charts/webapp -f charts/webapp/values-prod.yaml > /tmp/rendered.yaml
+          grep -c '^kind:' /tmp/rendered.yaml
+
+  install-on-kind:
+    runs-on: ubuntu-latest
+    needs: lint-and-template
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Create kind cluster
+        uses: helm/kind-action@v1
+      - name: Install chart (dev values) and wait until ready
+        run: |
+          helm install demo charts/webapp -f charts/webapp/values-dev.yaml --wait --timeout 120s
+          kubectl get pods,svc
+      - name: Smoke test through port-forward
+        run: |
+          kubectl port-forward svc/demo-webapp 8080:80 &
+          sleep 5
+          curl -fsS http://localhost:8080 | grep "Environment: dev"
+      - name: Upgrade to default values and roll back
+        run: |
+          helm upgrade demo charts/webapp --wait --timeout 120s
+          helm history demo
+          helm rollback demo 1 --wait --timeout 120s
