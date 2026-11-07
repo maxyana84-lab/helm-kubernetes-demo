@@ -44,3 +44,22 @@ helm uninstall demo
 ## Notes
 
 This is a hands-on practice project, not a production deployment. The image is a public nginx image used only to have something to run; the point of the project is the chart structure, values per environment, health probes, security context, and the install/upgrade/rollback workflow.
+
+## Multi-environment chart (`charts/myapp`)
+
+A three-tier app (Node.js frontend, FastAPI backend, PostgreSQL) in a single chart. Everything environment-specific lives in `values-dev.yaml`, `values-staging.yaml` and `values-prod.yaml` (no `--set`); `values.yaml` holds dev-friendly defaults.
+
+| | dev | staging | prod |
+|---|---|---|---|
+| Replicas (frontend / backend) | 1 / 1 | 2 / 2 | 3 + PDB / HPA (min 4) |
+| Database | StatefulSet | StatefulSet + backup CronJob | external RDS, ConfigMap only |
+| Exposure | NodePort | NGINX Ingress, self-signed TLS | NGINX Ingress, cert-manager TLS |
+| Secrets | ConfigMap | SealedSecret | ExternalSecret (AWS) |
+| Monitoring | - | ServiceMonitor | ServiceMonitor + PrometheusRule |
+
+```bash
+helm template myapp charts/myapp -f charts/myapp/values-prod.yaml
+helm lint charts/myapp -f charts/myapp/values-staging.yaml
+```
+
+The HPA template requires `autoscaling.minReplicas`, `maxReplicas` and `targetCPU`; if any is missing while `autoscaling.enabled: true`, rendering fails with a `required` error. Image names (`myorg/frontend`, `myorg/backend`) and the sealed-secret ciphertext in `values-staging.yaml` are placeholders.

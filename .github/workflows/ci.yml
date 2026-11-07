@@ -21,6 +21,32 @@ jobs:
           helm template demo charts/webapp -f charts/webapp/values-prod.yaml > /tmp/rendered.yaml
           grep -c '^kind:' /tmp/rendered.yaml
 
+  myapp-multi-env:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint and render every environment
+        run: |
+          for env in dev staging prod; do
+            helm lint charts/myapp -f charts/myapp/values-$env.yaml
+            helm template myapp charts/myapp -f charts/myapp/values-$env.yaml > /tmp/$env.yaml
+          done
+      - name: Check what each environment renders
+        run: |
+          ! grep -q '^kind: StatefulSet' /tmp/prod.yaml
+          grep -q '^kind: StatefulSet' /tmp/dev.yaml
+          grep -q '^kind: HorizontalPodAutoscaler' /tmp/prod.yaml
+          ! grep -q '^kind: HorizontalPodAutoscaler' /tmp/staging.yaml
+          ! grep -q '^kind: Ingress' /tmp/dev.yaml
+      - name: HPA must fail without autoscaling.targetCPU
+        run: |
+          sed '/targetCPU/d' charts/myapp/values-prod.yaml > /tmp/prod-nocpu.yaml
+          if helm template myapp charts/myapp -f /tmp/prod-nocpu.yaml 2> /tmp/err.txt; then
+            echo "expected failure"; exit 1
+          fi
+          grep "autoscaling.targetCPU is required" /tmp/err.txt
+
   install-on-kind:
     runs-on: ubuntu-latest
     needs: lint-and-template

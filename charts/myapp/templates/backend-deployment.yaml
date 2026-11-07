@@ -1,0 +1,55 @@
+{{- $ctx := dict "root" . "component" "backend" -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "myapp.componentName" $ctx }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  {{- /* With an HPA the replica count belongs to the autoscaler, not to the Deployment. */}}
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.backend.replicas }}
+  {{- end }}
+  selector:
+    matchLabels:
+      {{- include "myapp.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "myapp.labels" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: backend
+          image: "{{ .Values.backend.image.repository }}:{{ .Values.backend.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.port }}
+          env:
+            - name: DB_HOST
+              value: {{ include "myapp.dbHost" . | quote }}
+            - name: DB_PORT
+              value: {{ ternary .Values.database.externalPort .Values.database.port .Values.database.external | quote }}
+            - name: DB_NAME
+              value: {{ .Values.database.name | quote }}
+            {{- range $k, $v := .Values.backend.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          envFrom:
+            {{- include "myapp.secretsEnvFrom" . | nindent 12 }}
+            {{- if .Values.database.external }}
+            - configMapRef:
+                name: {{ include "myapp.dbConnName" . }}
+            {{- end }}
+          readinessProbe:
+            httpGet: {path: /health, port: http}
+          livenessProbe:
+            httpGet: {path: /health, port: http}
+            initialDelaySeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+          {{- with .Values.backend.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
