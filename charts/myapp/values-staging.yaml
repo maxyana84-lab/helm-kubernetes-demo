@@ -1,0 +1,38 @@
+environment: staging
+frontend:
+  replicas: 2
+  service: {type: ClusterIP}
+  resources:                          # soft limits: small requests, generous burst
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+backend:
+  replicas: 2
+  service: {type: ClusterIP}
+  env: {LOG_LEVEL: info}
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: 1, memory: 1Gi}
+database:
+  external: false
+  storage: 5Gi
+  service: {type: ClusterIP}
+  resources:
+    requests: {cpu: 200m, memory: 256Mi}
+    limits: {cpu: 1, memory: 1Gi}
+  backup: {enabled: true, storage: 10Gi, retentionDays: 14}
+  backupSchedule: "0 3 * * *"
+secrets:
+  mode: sealed
+  sealed:
+    encryptedData:
+      POSTGRES_USER: AgBy3i4OJSWK-REPLACE-WITH-KUBESEAL-OUTPUT
+      POSTGRES_PASSWORD: AgBy3i4OJSWK-REPLACE-WITH-KUBESEAL-OUTPUT
+ingress:
+  enabled: true
+  host: myapp.staging.example.com
+  tls: {enabled: true, mode: self-signed}
+autoscaling: {enabled: false}
+pdb: {enabled: false}
+monitoring:
+  serviceMonitor: {enabled: true}
+  prometheusRule: {enabled: false}

@@ -1,0 +1,36 @@
+environment: prod
+frontend:
+  replicas: 3
+  service: {type: ClusterIP}
+  resources:                          # hard limits = requests
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: 250m, memory: 256Mi}
+backend:
+  replicas: 4
+  service: {type: ClusterIP}
+  env: {LOG_LEVEL: warning}
+  resources:
+    requests: {cpu: 500m, memory: 512Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+database:
+  external: true                      # RDS: no StatefulSet
+  externalHost: myapp-prod.abc123xyz.eu-west-1.rds.amazonaws.com
+  externalPort: 5432
+  backup: {enabled: false}            # RDS handles its own backups
+secrets:
+  mode: external
+  external:
+    remoteKey: prod/myapp/db
+ingress:
+  enabled: true
+  host: myapp.example.com
+  tls: {enabled: true, mode: cert-manager, clusterIssuer: letsencrypt-prod}
+autoscaling:                          # applies to the backend
+  enabled: true
+  minReplicas: 4
+  maxReplicas: 12
+  targetCPU: 70
+pdb: {enabled: true, minAvailable: 2}
+monitoring:
+  serviceMonitor: {enabled: true}
+  prometheusRule: {enabled: true}

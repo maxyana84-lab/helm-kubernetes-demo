@@ -1,0 +1,18 @@
+environment: dev
+frontend:
+  replicas: 1
+  service: {type: NodePort}
+backend:
+  replicas: 1
+  service: {type: NodePort}
+database:
+  external: false
+  backup: {enabled: false}
+secrets:
+  mode: configmap
+ingress: {enabled: false}
+autoscaling: {enabled: false}
+pdb: {enabled: false}
+monitoring:
+  serviceMonitor: {enabled: false}
+  prometheusRule: {enabled: false}
