@@ -59,7 +59,7 @@ jobs:
       - name: Render counts (all enabled / notification disabled)
         working-directory: exercise-2
         run: |
-          count() { grep -c "^kind: $1" "$2"; }
+          count() { grep -c "^kind: $1\$" "$2"; }
           helm template platform ./platform > /tmp/all.yaml
           helm template platform ./platform --set notification-service.enabled=false > /tmp/no-notif.yaml
           [ "$(count Deployment /tmp/all.yaml)" = 4 ] && [ "$(count Service /tmp/all.yaml)" = 4 ]
@@ -79,7 +79,7 @@ jobs:
       - name: Rendered resources and hooks
         working-directory: exercise-3/bluegreen
         run: |
-          count() { grep -c "^kind: $1" "$2"; }
+          count() { grep -c "^kind: $1\$" "$2"; }
           helm template bg . > /tmp/default.yaml
           for k in Deployment:2 Service:2 Ingress:2 ServiceAccount:1 Role:1 RoleBinding:1 Job:3 PrometheusRule:1; do
             [ "$(count "${k%%:*}" /tmp/default.yaml)" = "${k##*:}" ] || { echo "unexpected count for $k"; exit 1; }
