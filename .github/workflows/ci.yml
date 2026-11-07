@@ -34,11 +34,11 @@ jobs:
           done
       - name: Check what each environment renders
         run: |
-          ! grep -q '^kind: StatefulSet' /tmp/prod.yaml
+          if grep -q '^kind: StatefulSet' /tmp/prod.yaml; then echo "unexpected match: grep -q '^kind: StatefulSet' /tmp/prod.yaml"; exit 1; fi
           grep -q '^kind: StatefulSet' /tmp/dev.yaml
           grep -q '^kind: HorizontalPodAutoscaler' /tmp/prod.yaml
-          ! grep -q '^kind: HorizontalPodAutoscaler' /tmp/staging.yaml
-          ! grep -q '^kind: Ingress' /tmp/dev.yaml
+          if grep -q '^kind: HorizontalPodAutoscaler' /tmp/staging.yaml; then echo "unexpected match: grep -q '^kind: HorizontalPodAutoscaler' /tmp/staging.yaml"; exit 1; fi
+          if grep -q '^kind: Ingress' /tmp/dev.yaml; then echo "unexpected match: grep -q '^kind: Ingress' /tmp/dev.yaml"; exit 1; fi
       - name: HPA must fail without autoscaling.targetCPU
         run: |
           sed '/targetCPU/d' charts/myapp/values-prod.yaml > /tmp/prod-nocpu.yaml
@@ -108,8 +108,8 @@ jobs:
           helm template bg . --set rollback.enabled=true > /tmp/rollback.yaml
           [ "$(grep -c '^kind: Job' /tmp/rollback.yaml)" = 1 ]
           grep -q 'name: bg-bluegreen-rollback' /tmp/rollback.yaml
-          ! grep -q 'smoke-test' /tmp/rollback.yaml
-          ! grep -q 'name: bg-bluegreen-cutover' /tmp/rollback.yaml
+          if grep -q 'smoke-test' /tmp/rollback.yaml; then echo "unexpected match: grep -q 'smoke-test' /tmp/rollback.yaml"; exit 1; fi
+          if grep -q 'name: bg-bluegreen-cutover' /tmp/rollback.yaml; then echo "unexpected match: grep -q 'name: bg-bluegreen-cutover' /tmp/rollback.yaml"; exit 1; fi
 
   exercise-4-cluster-autoscaler:
     runs-on: ubuntu-latest
