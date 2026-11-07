@@ -120,6 +120,6 @@ helm template bg . --set rollback.enabled=true      # rollback Job only
 Notes:
 - The hooks wait for readiness by polling `kubectl get` and scale with `kubectl patch`, so the Role needs no `watch`/`list` and no `deployments/scale` access.
 - The smoke test Job never fails by itself: it records `pass`/`fail` on the green Deployment and the cutover hook decides. A failing hook would make Helm abort before the cutover hook could scale green down.
-- After a successful cutover the live Service points to green while `activeSlot` in your values still says `blue`. Helm only patches fields that changed between releases, so the live selector is kept; record the new state in your values for the next release.
+- Helm 3 reverts live changes to every field that is present in the manifest, so the Deployments' `replicas` must agree with what the hooks do. On `helm upgrade` the green Deployment is therefore rendered with blue's replica count (on install green stays at 0), and with `rollback.enabled=true` green is rendered with 0 replicas. The primary Service selector is also reset to `activeSlot` by every upgrade and flipped to green again by the cutover hook: after a successful cutover record the new state in your values (`activeSlot: green`) before the next release.
 - `bitnami/kubectl` no longer publishes pinned tags, so the default is `bitnamilegacy/kubectl:1.31` (`hooks.kubectlImage`).
 - The hook scripts are syntax-checked and the manifests are rendered in CI, but they were not executed on a live cluster.

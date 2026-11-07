@@ -95,6 +95,13 @@ jobs:
           helm template bg . --set canary.weight=10 | grep -q 'canary-weight: "10"'
           if helm template bg . --set canary.weight=25 2> /tmp/err.txt; then echo "weight 25 must fail"; exit 1; fi
           grep -q 'canary.weight must be one of' /tmp/err.txt
+      - name: Replicas follow the hooks (Helm reverts live drift)
+        working-directory: exercise-3/bluegreen
+        run: |
+          reps() { helm template bg . "$@" | awk '/^kind: Deployment/{d=1} d&&/^  name:/{n=$2} d&&/^  replicas:/{print n"="$2; d=0}'; }
+          [ "$(reps)" = "$(printf 'bg-bluegreen-blue=2\nbg-bluegreen-green=0')" ]
+          [ "$(reps --is-upgrade)" = "$(printf 'bg-bluegreen-blue=2\nbg-bluegreen-green=2')" ]
+          [ "$(reps --is-upgrade --set rollback.enabled=true)" = "$(printf 'bg-bluegreen-blue=2\nbg-bluegreen-green=0')" ]
       - name: Rollback renders only the rollback hook
         working-directory: exercise-3/bluegreen
         run: |

@@ -2,6 +2,11 @@
 {{- range $slot := list "blue" "green" }}
 {{- $cfg := index $.Values $slot }}
 {{- $ctx := dict "root" $ "slot" $slot }}
+{{- /* Helm 3 reverts live drift on every field present in the manifest. The hooks scale the Deployments,
+       so the manifest must agree with them: on upgrade green follows blue; on rollback green is 0 and blue is up. */}}
+{{- $replicas := $cfg.replicas }}
+{{- if and (eq $slot "green") $.Release.IsUpgrade }}{{- $replicas = $.Values.blue.replicas }}{{- end }}
+{{- if and (eq $slot "green") $.Values.rollback.enabled }}{{- $replicas = 0 }}{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -15,7 +20,7 @@ metadata:
     prometheus.io/port: {{ $.Values.monitoring.prometheusAnnotations.port | quote }}
     prometheus.io/path: {{ $.Values.monitoring.prometheusAnnotations.path | quote }}
 spec:
-  replicas: {{ $cfg.replicas }}
+  replicas: {{ $replicas }}
   selector:
     matchLabels:
       {{- include "bg.selectorLabels" $ctx | nindent 6 }}
