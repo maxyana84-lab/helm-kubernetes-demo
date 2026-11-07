@@ -1,0 +1,20 @@
+apiVersion: v2
+name: platform
+description: Umbrella chart orchestrating the four microservices (all built on trtech-lib)
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+dependencies:
+  - name: auth-service
+    version: 0.1.0
+    repository: file://../services/auth-service
+  - name: user-service
+    version: 0.1.0
+    repository: file://../services/user-service
+  - name: payment-service
+    version: 0.1.0
+    repository: file://../services/payment-service
+  - name: notification-service
+    version: 0.1.0
+    repository: file://../services/notification-service
+    condition: notification-service.enabled

@@ -1,0 +1,6 @@
+dependencies:
+- name: trtech-lib
+  repository: file://../../trtech-lib
+  version: 0.1.0
+digest: sha256:bad32082e16d70aa9adf5c0f25493c24b346068d5aace78b2c47baf699ddd2f0
+generated: "2026-11-07T16:29:20.798695402Z"

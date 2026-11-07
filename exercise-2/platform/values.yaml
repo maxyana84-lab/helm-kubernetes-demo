@@ -1,0 +1,69 @@
+# Fallbacks for the mandatory labels; each service sets its own below.
+global:
+  team: platform
+  costCenter: cc-0000
+  partOf: platform
+
+auth-service:
+  replicaCount: 2
+  image: {repository: mccutchen/go-httpbin, tag: v2.15.0}
+  containerPort: 8080
+  service: {port: 8081}
+  env: {LOG_LEVEL: info, TOKEN_TTL: "15m"}
+  probes:
+    liveness: {path: /status/200}
+    readiness: {path: /status/200}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  team: identity
+  costCenter: cc-1001
+
+user-service:
+  replicaCount: 2
+  image: {repository: mccutchen/go-httpbin, tag: v2.15.0}
+  containerPort: 8080
+  service: {port: 8082}
+  env: {LOG_LEVEL: info}
+  probes:
+    liveness: {path: /status/200}
+    readiness: {path: /status/200}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+  team: identity
+  costCenter: cc-1002
+
+payment-service:
+  replicaCount: 3
+  image: {repository: mccutchen/go-httpbin, tag: v2.15.0}
+  containerPort: 8080
+  service: {port: 8083}
+  env: {LOG_LEVEL: warning, CURRENCY: EUR}
+  probes:
+    liveness: {path: /status/200, initialDelaySeconds: 15}
+    readiness: {path: /status/200}
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: 500m, memory: 512Mi}
+  team: payments
+  costCenter: cc-2001
+  pdb:
+    enabled: true
+    minAvailable: 2          # the extra PodDisruptionBudget only payment-service has
+
+notification-service:
+  enabled: true              # set to false to drop the whole sub-chart (Chart.yaml condition)
+  replicaCount: 1
+  image: {repository: mccutchen/go-httpbin, tag: v2.15.0}
+  containerPort: 8080
+  service: {port: 8084}
+  env: {LOG_LEVEL: info, SMTP_HOST: smtp.example.com}
+  probes:
+    liveness: {path: /status/200}
+    readiness: {path: /status/200}
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+  team: messaging
+  costCenter: cc-3001

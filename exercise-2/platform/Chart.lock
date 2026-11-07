@@ -1,0 +1,15 @@
+dependencies:
+- name: auth-service
+  repository: file://../services/auth-service
+  version: 0.1.0
+- name: user-service
+  repository: file://../services/user-service
+  version: 0.1.0
+- name: payment-service
+  repository: file://../services/payment-service
+  version: 0.1.0
+- name: notification-service
+  repository: file://../services/notification-service
+  version: 0.1.0
+digest: sha256:b0740e536e208aea5f3df816c5c39fadefd4b979dfb6ae61026a9b26d2f81826
+generated: "2026-11-07T16:29:20.927671403Z"
