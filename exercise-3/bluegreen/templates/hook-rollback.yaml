@@ -1,0 +1,40 @@
+{{- if .Values.rollback.enabled }}
+{{- $ctx := dict "root" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bg.suffixed" (dict "root" . "suffix" "rollback") }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add (int .Values.hooks.timeoutSeconds) 60 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bg.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "bg.hooksServiceAccount" . }}
+      restartPolicy: Never
+      containers:
+        - name: rollback
+          image: {{ .Values.hooks.kubectlImage }}
+          env:
+            {{- include "bg.hookEnv" . | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              {{- include "bg.shellLib" . | nindent 14 }}
+              # blue may have been scaled to 0 by a previous cutover: bring it back first, so traffic never hits an empty slot.
+              n=$(kubectl get deployment "$BLUE" -o jsonpath='{.spec.replicas}')
+              [ "${n:-0}" -ge 1 ] || { scale "$BLUE" "$BLUE_DEFAULT_REPLICAS"; }
+              wait_rollout "$BLUE"
+              kubectl patch service "$PRIMARY_SVC" -p '{"spec":{"selector":{"slot":"blue"}}}'
+              scale "$GREEN" 0
+              kubectl annotate deployment "$GREEN" bluegreen-smoke-result=rolled-back --overwrite
+              echo "rolled back: $PRIMARY_SVC -> blue, $GREEN scaled to 0"
+{{- end }}

@@ -1,0 +1,30 @@
+{{- /* Primary Service: its selector (slot) decides which Deployment gets traffic. */}}
+{{- $ctx := dict "root" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bg.fullname" . }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bg.selectorLabels" $ctx | nindent 4 }}
+    slot: {{ .Values.activeSlot }}
+  ports:
+    - {name: http, port: {{ .Values.service.port }}, targetPort: http}
+---
+{{- /* Green Service: always selects the candidate; target of the canary Ingress and the smoke tests. */}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "bg.greenServiceName" . }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "bg.selectorLabels" $ctx | nindent 4 }}
+    slot: green
+  ports:
+    - {name: http, port: {{ .Values.service.port }}, targetPort: http}

@@ -1,0 +1,38 @@
+{{- if not .Values.rollback.enabled }}
+{{- $ctx := dict "root" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bg.suffixed" (dict "root" . "suffix" "scale-green") }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-upgrade
+    "helm.sh/hook-weight": "-5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add (int .Values.hooks.timeoutSeconds) 60 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bg.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "bg.hooksServiceAccount" . }}
+      restartPolicy: Never
+      containers:
+        - name: scale-green
+          image: {{ .Values.hooks.kubectlImage }}
+          env:
+            {{- include "bg.hookEnv" . | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              {{- include "bg.shellLib" . | nindent 14 }}
+              # Scale green to blue's replica count and wait until every pod is Ready.
+              n=$(kubectl get deployment "$BLUE" -o jsonpath='{.spec.replicas}')
+              [ "${n:-0}" -ge 1 ] || n="$BLUE_DEFAULT_REPLICAS"
+              echo "scaling $GREEN to $n replicas (matching $BLUE)"
+              scale "$GREEN" "$n"
+              wait_rollout "$GREEN"
+{{- end }}
