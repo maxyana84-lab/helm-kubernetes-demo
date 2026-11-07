@@ -1,0 +1,16 @@
+# Task A.4: values for the autoscaler/cluster-autoscaler chart.
+cloudProvider: aws
+awsRegion: us-east-1
+
+autoDiscovery:
+  clusterName: devops-lab-ca     # ASGs tagged k8s.io/cluster-autoscaler/devops-lab-ca are discovered
+
+rbac:
+  serviceAccount:
+    create: false                # use the IRSA service account created by eksctl (Task A.3)
+    name: cluster-autoscaler
+
+# Keep the Cluster Autoscaler minor version equal to the Kubernetes minor version of the cluster,
+# e.g. for cluster version 1.34 use a v1.34.x tag (check the available tags before installing):
+# image:
+#   tag: v1.34.0

@@ -1,0 +1,25 @@
+# Task B.1: stress workload. 8 pods x 500m CPU = 4 vCPU of requests, more than 2 x t3.medium can offer
+# once system pods are accounted for, so some pods stay Pending and trigger a scale-up.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batch-processor
+  labels:
+    app: batch-processor
+spec:
+  replicas: 8
+  selector:
+    matchLabels:
+      app: batch-processor
+  template:
+    metadata:
+      labels:
+        app: batch-processor
+    spec:
+      containers:
+        - name: pause
+          image: public.ecr.aws/eks-distro/kubernetes/pause:3.7
+          resources:
+            requests:
+              cpu: 500m
+              memory: 512Mi

@@ -123,3 +123,7 @@ Notes:
 - Helm 3 reverts live changes to every field that is present in the manifest, so the Deployments' `replicas` must agree with what the hooks do. On `helm upgrade` the green Deployment is therefore rendered with blue's replica count (on install green stays at 0), and with `rollback.enabled=true` green is rendered with 0 replicas. The primary Service selector is also reset to `activeSlot` by every upgrade and flipped to green again by the cutover hook: after a successful cutover record the new state in your values (`activeSlot: green`) before the next release.
 - `bitnami/kubectl` no longer publishes pinned tags, so the default is `bitnamilegacy/kubectl:1.31` (`hooks.kubectlImage`).
 - The hook scripts are syntax-checked and the manifests are rendered in CI, but they were not executed on a live cluster.
+
+## Exercise: Cluster Autoscaler on EKS (`exercise-4-cluster-autoscaler/`)
+
+Written deliverables for deploying and testing Cluster Autoscaler on an EKS cluster: eksctl `ClusterConfig` (managed node group 2-6 x `t3.medium`, OIDC), the least-privilege IAM policy, the IRSA and Helm commands, the `batch-processor` stress Deployment, the clean-up commands and the answers to the scale-up, scale-down and conceptual questions. See the README in that folder. CI validates the policy and the YAML files; nothing in this repository creates AWS resources.

@@ -1,0 +1,28 @@
+# Task A.1: EKS cluster with a managed node group (2-6 x t3.medium) and an OIDC provider.
+#   eksctl create cluster -f cluster.yaml
+apiVersion: eksctl.io/v1alpha5
+kind: ClusterConfig
+
+metadata:
+  name: devops-lab-ca
+  region: us-east-1
+  # 1.29 or newer. Use a release that is still in standard support (older ones are billed at the
+  # extended-support rate); drop this line to let eksctl pick its default version.
+  version: "1.34"
+
+iam:
+  withOIDC: true            # required for IRSA (IAM roles for service accounts)
+
+managedNodeGroups:
+  - name: ng-main
+    instanceType: t3.medium
+    minSize: 2
+    maxSize: 6
+    desiredCapacity: 2
+    volumeSize: 20
+    # Managed node group tags are propagated to its Auto Scaling group.
+    # Cluster Autoscaler auto-discovers ASGs by these two tags, and the IAM policy
+    # allows SetDesiredCapacity / TerminateInstance only on ASGs that carry them.
+    tags:
+      k8s.io/cluster-autoscaler/enabled: "true"
+      k8s.io/cluster-autoscaler/devops-lab-ca: "owned"
