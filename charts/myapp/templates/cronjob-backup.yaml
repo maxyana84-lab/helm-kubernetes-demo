@@ -1,0 +1,54 @@
+{{- if and .Values.database.backup.enabled (not .Values.database.external) }}
+{{- $ctx := dict "root" . "component" "database-backup" }}
+{{- $name := include "myapp.componentName" $ctx }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: {{ .Values.database.backup.storage }}
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  schedule: {{ .Values.database.backupSchedule | default "0 3 * * *" | quote }}
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            {{- include "myapp.labels" $ctx | nindent 12 }}
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: pg-dump
+              image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+              envFrom:
+                {{- include "myapp.secretsEnvFrom" . | nindent 16 }}
+              command: ["/bin/sh", "-c"]
+              args:
+                - |
+                  set -e
+                  export PGPASSWORD="$POSTGRES_PASSWORD"
+                  pg_dump -h {{ include "myapp.dbHost" . }} -p {{ .Values.database.port }} -U "$POSTGRES_USER" {{ .Values.database.name }} \
+                    > /backup/{{ .Values.database.name }}-$(date +%Y%m%d-%H%M%S).sql
+                  find /backup -name '*.sql' -mtime +{{ .Values.database.backup.retentionDays }} -delete
+              volumeMounts:
+                - {name: backup, mountPath: /backup}
+          volumes:
+            - name: backup
+              persistentVolumeClaim:
+                claimName: {{ $name }}
+{{- end }}

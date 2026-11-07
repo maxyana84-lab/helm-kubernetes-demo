@@ -1,0 +1,27 @@
+{{- if .Values.autoscaling.enabled }}
+{{- /* All three fields are mandatory once autoscaling is on; fail loudly if one is missing. */}}
+{{- $min := required "autoscaling.minReplicas is required when autoscaling.enabled is true" .Values.autoscaling.minReplicas }}
+{{- $max := required "autoscaling.maxReplicas is required when autoscaling.enabled is true" .Values.autoscaling.maxReplicas }}
+{{- $cpu := required "autoscaling.targetCPU is required when autoscaling.enabled is true" .Values.autoscaling.targetCPU }}
+{{- $ctx := dict "root" . "component" "backend" }}
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ include "myapp.componentName" $ctx }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: {{ include "myapp.componentName" $ctx }}
+  minReplicas: {{ $min }}
+  maxReplicas: {{ $max }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $cpu }}
+{{- end }}

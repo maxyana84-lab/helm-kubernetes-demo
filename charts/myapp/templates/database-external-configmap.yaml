@@ -1,0 +1,11 @@
+{{- if .Values.database.external }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "myapp.dbConnName" . }}
+  labels:
+    {{- include "myapp.labels" (dict "root" . "component" "database") | nindent 4 }}
+data:
+  # Credentials are NOT here: they come from the secrets object (POSTGRES_USER / POSTGRES_PASSWORD).
+  DATABASE_URL: {{ printf "postgresql://%s:%v/%s" (include "myapp.dbHost" .) .Values.database.externalPort .Values.database.name | quote }}
+{{- end }}

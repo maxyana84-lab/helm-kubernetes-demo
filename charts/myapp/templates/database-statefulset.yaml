@@ -1,0 +1,50 @@
+{{- if not .Values.database.external }}
+{{- $ctx := dict "root" . "component" "database" }}
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "myapp.componentName" $ctx }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  serviceName: {{ include "myapp.componentName" $ctx }}
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "myapp.selectorLabels" $ctx | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "myapp.labels" $ctx | nindent 8 }}
+    spec:
+      containers:
+        - name: postgres
+          image: "{{ .Values.database.image.repository }}:{{ .Values.database.image.tag }}"
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: {{ .Values.database.port }}
+          env:
+            - name: POSTGRES_DB
+              value: {{ .Values.database.name | quote }}
+            - name: PGDATA
+              value: /var/lib/postgresql/data/pgdata
+          envFrom:
+            {{- include "myapp.secretsEnvFrom" . | nindent 12 }}
+          readinessProbe:
+            exec: {command: ["pg_isready", "-U", "$(POSTGRES_USER)"]}
+          volumeMounts:
+            - {name: data, mountPath: /var/lib/postgresql/data}
+          {{- with .Values.database.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: [ReadWriteOnce]
+        resources:
+          requests:
+            storage: {{ .Values.database.storage }}
+{{- end }}

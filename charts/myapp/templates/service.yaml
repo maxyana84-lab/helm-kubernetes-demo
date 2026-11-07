@@ -1,0 +1,25 @@
+{{- /* One Service per tier. The database Service is skipped when the DB is external. */}}
+{{- $tiers := list "frontend" "backend" }}
+{{- if not .Values.database.external }}{{- $tiers = append $tiers "database" }}{{- end }}
+{{- range $tier := $tiers }}
+{{- $cfg := index $.Values $tier }}
+{{- $ctx := dict "root" $ "component" $tier }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "myapp.componentName" $ctx }}
+  labels:
+    {{- include "myapp.labels" $ctx | nindent 4 }}
+spec:
+  type: {{ $cfg.service.type }}
+  selector:
+    {{- include "myapp.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: {{ ternary "postgres" "http" (eq $tier "database") }}
+      port: {{ default $cfg.port $cfg.service.port }}
+      targetPort: {{ ternary "postgres" "http" (eq $tier "database") }}
+      {{- if and (eq $cfg.service.type "NodePort") $cfg.service.nodePort }}
+      nodePort: {{ $cfg.service.nodePort }}
+      {{- end }}
+{{- end }}
