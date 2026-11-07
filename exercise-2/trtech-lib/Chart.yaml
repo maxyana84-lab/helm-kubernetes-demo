@@ -1,0 +1,5 @@
+apiVersion: v2
+name: trtech-lib
+description: Company-wide standards as named templates (labels, Deployment, Service, NetworkPolicy, anti-affinity, PDB)
+type: library
+version: 0.1.0

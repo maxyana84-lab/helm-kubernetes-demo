@@ -47,6 +47,26 @@ jobs:
           fi
           grep "autoscaling.targetCPU is required" /tmp/err.txt
 
+  exercise-2-library-umbrella:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Build trtech-lib, services and platform dependencies
+        run: ./exercise-2/build.sh
+      - name: Lint
+        run: helm lint exercise-2/platform
+      - name: Render counts (all enabled / notification disabled)
+        working-directory: exercise-2
+        run: |
+          count() { grep -c "^kind: $1" "$2"; }
+          helm template platform ./platform > /tmp/all.yaml
+          helm template platform ./platform --set notification-service.enabled=false > /tmp/no-notif.yaml
+          [ "$(count Deployment /tmp/all.yaml)" = 4 ] && [ "$(count Service /tmp/all.yaml)" = 4 ]
+          [ "$(count NetworkPolicy /tmp/all.yaml)" = 4 ] && [ "$(count PodDisruptionBudget /tmp/all.yaml)" = 1 ]
+          [ "$(count Deployment /tmp/no-notif.yaml)" = 3 ] && [ "$(count Service /tmp/no-notif.yaml)" = 3 ]
+          [ "$(count NetworkPolicy /tmp/no-notif.yaml)" = 3 ]
+
   install-on-kind:
     runs-on: ubuntu-latest
     needs: lint-and-template

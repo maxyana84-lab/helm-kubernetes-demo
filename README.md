@@ -77,3 +77,18 @@ kubectl create secret generic myapp-secrets --dry-run=client \
 | jq '.spec.encryptedData'
 ```
 Paste the two values into `secrets.sealed.encryptedData` in `values-staging.yaml`. The `--scope cluster-wide` flag is needed because the chart names the secret `<release>-myapp-secrets`.
+
+## Exercise 2: library chart + umbrella chart (`exercise-2/`)
+
+- `trtech-lib/`: library chart (`type: library`) with named templates: `trtech-lib.labels`, `.deployment` (probes with configurable paths, resources, anti-affinity, `topologySpreadConstraints`), `.service`, `.networkpolicy` (ingress only from namespaces labelled `role: frontend`), `.podantiaffinity`, `.pdb`.
+- `services/{auth,user,payment,notification}-service`: sub-charts whose templates are one-liners like `{{ include "trtech-lib.deployment" . }}`. `payment-service` also renders a PodDisruptionBudget (`minAvailable: 2`).
+- `platform/`: umbrella chart that configures all four services; `notification-service` can be switched off with `notification-service.enabled=false` (dependency `condition`).
+
+```bash
+cd exercise-2
+./build.sh                      # package lib, helm dependency update/build, tgz files land in platform/charts/
+helm lint ./platform
+helm template platform ./platform                                        # 4 Deployments, 4 Services, 4 NetworkPolicies, 1 PDB
+helm template platform ./platform --set notification-service.enabled=false   # 3 of each, 1 PDB
+```
+Generated `*.tgz` files are git-ignored; CI runs `build.sh` first.

@@ -1,0 +1,17 @@
+# Defaults so the service also lints on its own; the umbrella chart overrides them.
+replicaCount: 1
+image:
+  repository: mccutchen/go-httpbin
+  tag: v2.15.0
+containerPort: 8080
+service:
+  port: 8081
+env: {}
+probes:
+  liveness: {path: /status/200}
+  readiness: {path: /status/200}
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {cpu: 200m, memory: 128Mi}
+team: identity
+costCenter: cc-1001
