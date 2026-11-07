@@ -1,0 +1,42 @@
+{{- if not .Values.rollback.enabled }}
+{{- $ctx := dict "root" . }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bg.suffixed" (dict "root" . "suffix" "cutover") }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add (int .Values.hooks.timeoutSeconds) 60 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bg.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "bg.hooksServiceAccount" . }}
+      restartPolicy: Never
+      containers:
+        - name: cutover
+          image: {{ .Values.hooks.kubectlImage }}
+          env:
+            {{- include "bg.hookEnv" . | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              {{- include "bg.shellLib" . | nindent 14 }}
+              result=$(kubectl get deployment "$GREEN" -o "jsonpath={.metadata.annotations['bluegreen-smoke-result']}")
+              if [ "$result" = "pass" ]; then
+                echo "smoke tests passed: switching $PRIMARY_SVC to green and scaling blue to 0"
+                kubectl patch service "$PRIMARY_SVC" -p '{"spec":{"selector":{"slot":"green"}}}'
+                scale "$BLUE" 0
+              else
+                echo "smoke tests did not pass (result: ${result:-none}): scaling green to 0" >&2
+                scale "$GREEN" 0
+                exit 1
+              fi
+{{- end }}

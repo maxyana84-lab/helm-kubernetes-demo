@@ -1,0 +1,89 @@
+{{- if not .Values.rollback.enabled }}
+{{- $ctx := dict "root" . }}
+{{- $tests := .Values.canary.tests }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "bg.suffixed" (dict "root" . "suffix" "smoke-test") }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-upgrade
+    "helm.sh/hook-weight": "0"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: {{ add (int .Values.hooks.timeoutSeconds) 120 }}
+  template:
+    metadata:
+      labels:
+        {{- include "bg.labels" $ctx | nindent 8 }}
+    spec:
+      serviceAccountName: {{ include "bg.hooksServiceAccount" . }}
+      restartPolicy: Never
+      volumes:
+        - {name: shared, emptyDir: {}}
+      initContainers:
+        # 1. mark the previous verdict as stale and wait until green has finished rolling out
+        - name: wait-green
+          image: {{ .Values.hooks.kubectlImage }}
+          env:
+            {{- include "bg.hookEnv" . | nindent 12 }}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              {{- include "bg.shellLib" . | nindent 14 }}
+              kubectl annotate deployment "$GREEN" bluegreen-smoke-result=pending --overwrite
+              wait_rollout "$GREEN"
+        # 2. HTTP request to the green Service (retry until it answers)
+        - name: probe
+          image: {{ .Values.hooks.curlImage }}
+          env:
+            - name: URL
+              value: "http://{{ include "bg.greenServiceName" . }}.{{ .Release.Namespace }}.svc.cluster.local:{{ .Values.service.port }}{{ $tests.endpoint }}"
+          volumeMounts:
+            - {name: shared, mountPath: /shared}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              i=0
+              while [ "$i" -lt 30 ]; do
+                out=$(curl -s -o /dev/null -m 5 -w '%{http_code} %{time_total}' "$URL" || true)
+                case "$out" in
+                  ""|000*) i=$((i + 1)); sleep 2 ;;
+                  *) echo "$out" > /shared/result; exit 0 ;;
+                esac
+              done
+              echo "000 99" > /shared/result
+        # 3. assertion: expected status code and response time
+        - name: assert
+          image: {{ .Values.hooks.busyboxImage }}
+          env:
+            - {name: EXPECTED_STATUS, value: {{ $tests.expectedStatus | quote }}}
+            - {name: MAX_MS, value: {{ $tests.maxResponseTimeMs | quote }}}
+          volumeMounts:
+            - {name: shared, mountPath: /shared}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              read code secs < /shared/result
+              ms=$(awk -v t="$secs" 'BEGIN { printf "%d", t * 1000 }')
+              if [ "$code" = "$EXPECTED_STATUS" ] && [ "$ms" -lt "$MAX_MS" ]; then verdict=pass; else verdict=fail; fi
+              echo "$verdict" > /shared/verdict
+              echo "status=$code (expected $EXPECTED_STATUS) time=${ms}ms (max ${MAX_MS}ms) -> $verdict"
+      containers:
+        # 4. record the verdict on the green Deployment; the cutover hook reads it.
+        #    Always exits 0 so that Helm still runs the cutover hook, which handles failure itself.
+        - name: record-result
+          image: {{ .Values.hooks.kubectlImage }}
+          env:
+            {{- include "bg.hookEnv" . | nindent 12 }}
+          volumeMounts:
+            - {name: shared, mountPath: /shared}
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              set -eu
+              verdict=$(cat /shared/verdict)
+              kubectl annotate deployment "$GREEN" "bluegreen-smoke-result=$verdict" --overwrite
+{{- end }}

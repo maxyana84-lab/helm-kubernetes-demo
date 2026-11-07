@@ -92,3 +92,34 @@ helm template platform ./platform                                        # 4 Dep
 helm template platform ./platform --set notification-service.enabled=false   # 3 of each, 1 PDB
 ```
 Generated `*.tgz` files are git-ignored; CI runs `build.sh` first.
+
+## Exercise 3: blue-green deployment with traffic splitting (`exercise-3/bluegreen/`)
+
+Two Deployments (`<release>-blue` stable, `<release>-green` candidate) are rendered on every install. Only native Kubernetes resources are used: Service selectors and NGINX Ingress canary annotations, no service mesh.
+
+| Piece | How it works |
+|---|---|
+| Primary Service | selector `slot: {{ .Values.activeSlot }}`, decides which Deployment gets traffic |
+| Green Service | always selects `slot: green`; target of the canary Ingress and of the smoke test |
+| Ingresses | primary Ingress -> primary Service; canary Ingress (`canary: "true"`, `canary-weight`) -> green Service. Allowed weights: 0, 10, 50, 100 |
+| pre-upgrade hook (weight -5) | scales green to blue's replica count and waits until all pods are Ready |
+| post-upgrade hook (weight 0) | smoke test against the green Service: expected status code and response time below `canary.tests.maxResponseTimeMs`; the verdict is stored in the annotation `bluegreen-smoke-result` on the green Deployment |
+| post-upgrade hook (weight 5) | verdict `pass`: primary Service -> green, blue scaled to 0. Otherwise green is scaled to 0 and the Job fails |
+| rollback (`rollback.enabled=true`) | renders only a post-upgrade rollback Job: blue is scaled back up if needed, Service -> blue, green -> 0. Pre-upgrade, smoke test and cutover hooks are skipped |
+| RBAC | one ServiceAccount, Role and RoleBinding for the hooks: only `get` and `patch` on Deployments and Services of the release namespace |
+| Monitoring | `prometheus.io/*` annotations on both Deployments and a PrometheusRule `CanaryErrorRateHigh` (green 5xx ratio above 5% over 2 minutes) |
+
+```bash
+cd exercise-3/bluegreen
+helm lint .
+helm template bg .                                  # 2 Deployments, 2 Services, 2 Ingresses, SA, Role, RoleBinding, 3 hook Jobs
+helm template bg . --set canary.weight=10 | grep canary-weight
+helm template bg . --set rollback.enabled=true      # rollback Job only
+```
+
+Notes:
+- The hooks wait for readiness by polling `kubectl get` and scale with `kubectl patch`, so the Role needs no `watch`/`list` and no `deployments/scale` access.
+- The smoke test Job never fails by itself: it records `pass`/`fail` on the green Deployment and the cutover hook decides. A failing hook would make Helm abort before the cutover hook could scale green down.
+- After a successful cutover the live Service points to green while `activeSlot` in your values still says `blue`. Helm only patches fields that changed between releases, so the live selector is kept; record the new state in your values for the next release.
+- `bitnami/kubectl` no longer publishes pinned tags, so the default is `bitnamilegacy/kubectl:1.31` (`hooks.kubectlImage`).
+- The hook scripts are syntax-checked and the manifests are rendered in CI, but they were not executed on a live cluster.

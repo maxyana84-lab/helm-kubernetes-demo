@@ -1,0 +1,58 @@
+nameOverride: ""
+fullnameOverride: ""
+
+# Which slot the primary Service selects (slot: <activeSlot>). blue = stable, green = candidate.
+activeSlot: blue
+
+containerPort: 8080
+service:
+  port: 80
+probes:
+  path: /status/200
+
+# Stable version. Stays running at `replicas`.
+blue:
+  replicas: 2
+  image: {repository: mccutchen/go-httpbin, tag: v2.14.0}
+# Candidate version. Starts at 0; the pre-upgrade hook scales it to blue's replica count.
+green:
+  replicas: 0
+  image: {repository: mccutchen/go-httpbin, tag: v2.15.0}
+
+resources:
+  requests: {cpu: 50m, memory: 64Mi}
+  limits: {cpu: 200m, memory: 128Mi}
+
+ingress:
+  className: nginx
+  host: bluegreen.example.com
+
+# Share of traffic sent to green through the NGINX canary Ingress. Allowed: 0, 10, 50, 100.
+canary:
+  weight: 0
+  tests:
+    endpoint: /status/200
+    expectedStatus: 200
+    maxResponseTimeMs: 500
+
+# When true: render only the rollback hook (Service back to blue, green to 0);
+# the pre-upgrade scale-up, smoke test and cutover hooks are skipped.
+rollback:
+  enabled: false
+
+hooks:
+  timeoutSeconds: 300
+  kubectlImage: bitnamilegacy/kubectl:1.31   # bitnami/kubectl no longer publishes pinned tags
+  curlImage: curlimages/curl:8.10.1
+  busyboxImage: busybox:1.36
+
+monitoring:
+  prometheusAnnotations:
+    port: "8080"
+    path: /metrics
+  prometheusRule:
+    enabled: true
+    metric: http_requests_total     # counter exposed by the app
+    statusLabel: code               # label holding the HTTP status
+    threshold: 0.05                 # 5% of requests
+    window: 2m

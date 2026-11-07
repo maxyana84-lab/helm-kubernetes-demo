@@ -1,0 +1,6 @@
+apiVersion: v2
+name: bluegreen
+description: Blue-green deployment with NGINX canary traffic splitting, Helm hook automation and instant rollback
+type: application
+version: 0.1.0
+appVersion: "1.0.0"

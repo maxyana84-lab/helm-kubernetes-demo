@@ -1,0 +1,48 @@
+{{- include "bg.validate" . }}
+{{- range $slot := list "blue" "green" }}
+{{- $cfg := index $.Values $slot }}
+{{- $ctx := dict "root" $ "slot" $slot }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "bg.slotName" $ctx }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+    slot: {{ $slot }}
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: {{ $.Values.monitoring.prometheusAnnotations.port | quote }}
+    prometheus.io/path: {{ $.Values.monitoring.prometheusAnnotations.path | quote }}
+spec:
+  replicas: {{ $cfg.replicas }}
+  selector:
+    matchLabels:
+      {{- include "bg.selectorLabels" $ctx | nindent 6 }}
+      slot: {{ $slot }}
+  template:
+    metadata:
+      labels:
+        {{- include "bg.labels" $ctx | nindent 8 }}
+        slot: {{ $slot }}
+        version: {{ $cfg.image.tag | quote }}
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ $.Values.monitoring.prometheusAnnotations.port | quote }}
+        prometheus.io/path: {{ $.Values.monitoring.prometheusAnnotations.path | quote }}
+    spec:
+      containers:
+        - name: app
+          image: "{{ $cfg.image.repository }}:{{ $cfg.image.tag }}"
+          ports:
+            - {name: http, containerPort: {{ $.Values.containerPort }}}
+          readinessProbe:
+            httpGet: {path: {{ $.Values.probes.path }}, port: http}
+          livenessProbe:
+            httpGet: {path: {{ $.Values.probes.path }}, port: http}
+            initialDelaySeconds: 10
+          {{- with $.Values.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+{{- end }}

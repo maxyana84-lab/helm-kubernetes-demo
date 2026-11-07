@@ -1,0 +1,27 @@
+{{- if .Values.monitoring.prometheusRule.enabled }}
+{{- $ctx := dict "root" . }}
+{{- $rule := .Values.monitoring.prometheusRule }}
+{{- $green := include "bg.slotName" (dict "root" . "slot" "green") }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "bg.fullname" . }}
+  labels:
+    {{- include "bg.labels" $ctx | nindent 4 }}
+spec:
+  groups:
+    - name: {{ include "bg.fullname" . }}.canary
+      rules:
+        - alert: CanaryErrorRateHigh
+          expr: |
+            sum(rate({{ $rule.metric }}{namespace="{{ .Release.Namespace }}",pod=~"{{ $green }}-.*",{{ $rule.statusLabel }}=~"5.."}[{{ $rule.window }}]))
+            /
+            sum(rate({{ $rule.metric }}{namespace="{{ .Release.Namespace }}",pod=~"{{ $green }}-.*"}[{{ $rule.window }}]))
+            > {{ $rule.threshold }}
+          for: {{ $rule.window }}
+          labels:
+            severity: critical
+          annotations:
+            summary: "Green deployment {{ $green }} returns more than {{ mulf $rule.threshold 100 }}% 5xx over {{ $rule.window }}"
+            description: "Run helm upgrade --set rollback.enabled=true to roll traffic back to blue."
+{{- end }}

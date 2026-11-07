@@ -67,6 +67,43 @@ jobs:
           [ "$(count Deployment /tmp/no-notif.yaml)" = 3 ] && [ "$(count Service /tmp/no-notif.yaml)" = 3 ]
           [ "$(count NetworkPolicy /tmp/no-notif.yaml)" = 3 ]
 
+  exercise-3-bluegreen:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: |
+          helm lint exercise-3/bluegreen
+          helm lint exercise-3/bluegreen --set rollback.enabled=true
+      - name: Rendered resources and hooks
+        working-directory: exercise-3/bluegreen
+        run: |
+          count() { grep -c "^kind: $1" "$2"; }
+          helm template bg . > /tmp/default.yaml
+          for k in Deployment:2 Service:2 Ingress:2 ServiceAccount:1 Role:1 RoleBinding:1 Job:3 PrometheusRule:1; do
+            [ "$(count "${k%%:*}" /tmp/default.yaml)" = "${k##*:}" ] || { echo "unexpected count for $k"; exit 1; }
+          done
+          grep -q 'helm.sh/hook-weight": "-5"' /tmp/default.yaml
+          grep -q 'helm.sh/hook-weight": "0"' /tmp/default.yaml
+          grep -q 'helm.sh/hook-weight": "5"' /tmp/default.yaml
+          grep -c 'serviceAccountName: bg-bluegreen-hooks' /tmp/default.yaml | grep -qx 3
+          grep -q 'CanaryErrorRateHigh' /tmp/default.yaml
+      - name: Canary weight annotation and validation
+        working-directory: exercise-3/bluegreen
+        run: |
+          helm template bg . --set canary.weight=10 | grep -q 'canary-weight: "10"'
+          if helm template bg . --set canary.weight=25 2> /tmp/err.txt; then echo "weight 25 must fail"; exit 1; fi
+          grep -q 'canary.weight must be one of' /tmp/err.txt
+      - name: Rollback renders only the rollback hook
+        working-directory: exercise-3/bluegreen
+        run: |
+          helm template bg . --set rollback.enabled=true > /tmp/rollback.yaml
+          [ "$(grep -c '^kind: Job' /tmp/rollback.yaml)" = 1 ]
+          grep -q 'name: bg-bluegreen-rollback' /tmp/rollback.yaml
+          ! grep -q 'smoke-test' /tmp/rollback.yaml
+          ! grep -q 'name: bg-bluegreen-cutover' /tmp/rollback.yaml
+
   install-on-kind:
     runs-on: ubuntu-latest
     needs: lint-and-template
