@@ -5,17 +5,21 @@ fullnameOverride: ""
 imagePullPolicy: IfNotPresent
 
 frontend:
-  image: {repository: myorg/frontend, tag: "1.0.0"}   # Node.js
+  # Public stand-in image (static web server). Replace with your Node.js frontend image.
+  image: {repository: nginxinc/nginx-unprivileged, tag: "1.27-alpine"}
   replicas: 1
-  port: 3000
+  port: 8080
+  healthPath: /
   service: {type: NodePort, port: 80, nodePort: 30080}
   env: {}
   resources: {}
 
 backend:
-  image: {repository: myorg/backend, tag: "1.0.0"}    # Python FastAPI
+  # Public stand-in image (HTTP API with /status/200). Replace with your FastAPI backend image.
+  image: {repository: mccutchen/go-httpbin, tag: "v2.15.0"}
   replicas: 1
-  port: 8000
+  port: 8080
+  healthPath: /status/200
   service: {type: NodePort, port: 8000, nodePort: 30800}
   env:
     LOG_LEVEL: debug

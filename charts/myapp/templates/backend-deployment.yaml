@@ -43,9 +43,9 @@ spec:
                 name: {{ include "myapp.dbConnName" . }}
             {{- end }}
           readinessProbe:
-            httpGet: {path: /health, port: http}
+            httpGet: {path: {{ .Values.backend.healthPath }}, port: http}
           livenessProbe:
-            httpGet: {path: /health, port: http}
+            httpGet: {path: {{ .Values.backend.healthPath }}, port: http}
             initialDelaySeconds: 10
           securityContext:
             allowPrivilegeEscalation: false

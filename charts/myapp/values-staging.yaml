@@ -25,8 +25,8 @@ secrets:
   mode: sealed
   sealed:
     encryptedData:
-      POSTGRES_USER: AgBy3i4OJSWK-REPLACE-WITH-KUBESEAL-OUTPUT
-      POSTGRES_PASSWORD: AgBy3i4OJSWK-REPLACE-WITH-KUBESEAL-OUTPUT
+      POSTGRES_USER: REPLACE_WITH_KUBESEAL_OUTPUT
+      POSTGRES_PASSWORD: REPLACE_WITH_KUBESEAL_OUTPUT
 ingress:
   enabled: true
   host: myapp.staging.example.com
