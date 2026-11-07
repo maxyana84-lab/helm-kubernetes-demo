@@ -111,6 +111,36 @@ jobs:
           ! grep -q 'smoke-test' /tmp/rollback.yaml
           ! grep -q 'name: bg-bluegreen-cutover' /tmp/rollback.yaml
 
+  exercise-4-cluster-autoscaler:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate the IAM policy and the YAML files
+        working-directory: exercise-4-cluster-autoscaler
+        run: |
+          pip install -q pyyaml
+          jq -e '.Statement | length == 2' iam/cluster-autoscaler-policy.json
+          jq -e '[.Statement[].Action[]] | (index("autoscaling:SetDesiredCapacity") != null) and (index("autoscaling:TerminateInstanceInAutoScalingGroup") != null) and (index("autoscaling:DescribeAutoScalingGroups") != null)' iam/cluster-autoscaler-policy.json
+          python3 - <<'PY'
+          import yaml
+          cfg = yaml.safe_load(open("cluster.yaml"))
+          ng = cfg["managedNodeGroups"][0]
+          assert cfg["metadata"] == {"name": "devops-lab-ca", "region": "us-east-1", "version": cfg["metadata"]["version"]}
+          assert float(cfg["metadata"]["version"]) >= 1.29
+          assert cfg["iam"]["withOIDC"] is True
+          assert (ng["instanceType"], ng["minSize"], ng["maxSize"]) == ("t3.medium", 2, 6)
+          assert "k8s.io/cluster-autoscaler/devops-lab-ca" in ng["tags"]
+          dep = yaml.safe_load(open("batch-processor.yaml"))
+          c = dep["spec"]["template"]["spec"]["containers"][0]
+          assert dep["metadata"]["name"] == "batch-processor" and dep["spec"]["replicas"] == 8
+          assert c["image"] == "public.ecr.aws/eks-distro/kubernetes/pause:3.7"
+          assert c["resources"]["requests"] == {"cpu": "500m", "memory": "512Mi"}
+          vals = yaml.safe_load(open("helm/values-cluster-autoscaler.yaml"))
+          assert vals["autoDiscovery"]["clusterName"] == "devops-lab-ca"
+          assert vals["rbac"]["serviceAccount"] == {"create": False, "name": "cluster-autoscaler"}
+          print("exercise 4 files OK")
+          PY
+
   install-on-kind:
     runs-on: ubuntu-latest
     needs: lint-and-template
