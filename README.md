@@ -62,4 +62,18 @@ helm template myapp charts/myapp -f charts/myapp/values-prod.yaml
 helm lint charts/myapp -f charts/myapp/values-staging.yaml
 ```
 
-The HPA template requires `autoscaling.minReplicas`, `maxReplicas` and `targetCPU`; if any is missing while `autoscaling.enabled: true`, rendering fails with a `required` error. Image names (`myorg/frontend`, `myorg/backend`) and the sealed-secret ciphertext in `values-staging.yaml` are placeholders.
+The HPA template requires `autoscaling.minReplicas`, `maxReplicas` and `targetCPU`; if any is missing while `autoscaling.enabled: true`, rendering fails with a `required` error.
+
+### Images
+The frontend and backend use public stand-in images so the pods really start: `nginxinc/nginx-unprivileged:1.27-alpine` and `mccutchen/go-httpbin:v2.15.0` (health endpoint `/status/200`). Swap in your own Node.js and FastAPI images via `frontend.image`, `backend.image`, `*.port` and `*.healthPath` in the values files. The database uses `postgres:16-alpine`.
+
+### Staging SealedSecret
+`values-staging.yaml` contains `REPLACE_WITH_KUBESEAL_OUTPUT` placeholders: real ciphertext can only be produced with the public certificate of your own cluster's sealed-secrets controller.
+
+```bash
+kubectl create secret generic myapp-secrets --dry-run=client \
+  --from-literal=POSTGRES_USER=app --from-literal=POSTGRES_PASSWORD='<strong-password>' -o json \
+| kubeseal --controller-namespace kube-system --scope cluster-wide -o json \
+| jq '.spec.encryptedData'
+```
+Paste the two values into `secrets.sealed.encryptedData` in `values-staging.yaml`. The `--scope cluster-wide` flag is needed because the chart names the secret `<release>-myapp-secrets`.

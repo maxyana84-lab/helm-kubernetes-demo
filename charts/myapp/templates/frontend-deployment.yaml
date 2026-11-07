@@ -30,9 +30,9 @@ spec:
               value: {{ $v | quote }}
             {{- end }}
           readinessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: {{ .Values.frontend.healthPath }}, port: http}
           livenessProbe:
-            httpGet: {path: /, port: http}
+            httpGet: {path: {{ .Values.frontend.healthPath }}, port: http}
             initialDelaySeconds: 10
           securityContext:
             allowPrivilegeEscalation: false
