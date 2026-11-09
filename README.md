@@ -38,8 +38,16 @@ helm uninstall demo
 
 ## CI (`.github/workflows/ci.yml`)
 
-1. `helm lint` with the default, dev and prod values, then `helm template`.
-2. Create a `kind` cluster, `helm install --wait` with dev values, smoke-test the page through a port-forward, then `helm upgrade` and `helm rollback`.
+| Job | What it checks |
+|---|---|
+| `lint-and-template` | `helm lint` of `charts/webapp` with the default, dev and prod values, then `helm template` |
+| `install-on-kind` | creates a `kind` cluster, `helm install --wait` with dev values, smoke-tests the page through a port-forward, then `helm upgrade` and `helm rollback` (`charts/webapp`) |
+| `myapp-multi-env` | lint and render of `charts/myapp` for dev, staging and prod: resource sets per environment, `required` failure without `targetCPU` |
+| `exercise-2-library-umbrella` | builds the library and the sub-charts, lints `platform`, checks 4/4/4/1 resources and 3/3/3/1 with `notification-service` disabled |
+| `exercise-3-bluegreen` | lint and render of the blue-green chart: resource counts, hook weights, canary annotation, weight validation, rollback render, replicas that follow the hooks |
+| `exercise-4-cluster-autoscaler` | validates the IAM policy, the eksctl ClusterConfig, the stress Deployment and the Helm values |
+
+Everything except `install-on-kind` only renders and validates files: nothing in CI runs the blue-green hooks or touches AWS.
 
 ## Notes
 
@@ -107,7 +115,7 @@ Two Deployments (`<release>-blue` stable, `<release>-green` candidate) are rende
 | post-upgrade hook (weight 5) | verdict `pass`: primary Service -> green, blue scaled to 0. Otherwise green is scaled to 0 and the Job fails |
 | rollback (`rollback.enabled=true`) | renders only a post-upgrade rollback Job: blue is scaled back up if needed, Service -> blue, green -> 0. Pre-upgrade, smoke test and cutover hooks are skipped |
 | RBAC | one ServiceAccount, Role and RoleBinding for the hooks: only `get` and `patch` on Deployments and Services of the release namespace |
-| Monitoring | `prometheus.io/*` annotations on both Deployments and a PrometheusRule `CanaryErrorRateHigh` (green 5xx ratio above 5% over 2 minutes) |
+| Monitoring | `prometheus.io/*` annotations on both Deployments and a PrometheusRule `CanaryErrorRateHigh` (green 5xx ratio above 5% over 2 minutes). The stand-in image `go-httpbin` does not expose `/metrics`: the rule assumes an application that exports `http_requests_total{code=...}` (configurable in `monitoring.prometheusRule`) |
 
 ```bash
 cd exercise-3/bluegreen
@@ -122,7 +130,8 @@ Notes:
 - The smoke test Job never fails by itself: it records `pass`/`fail` on the green Deployment and the cutover hook decides. A failing hook would make Helm abort before the cutover hook could scale green down.
 - Helm 3 reverts live changes to every field that is present in the manifest, so the Deployments' `replicas` must agree with what the hooks do. On `helm upgrade` the green Deployment is therefore rendered with blue's replica count (on install green stays at 0), and with `rollback.enabled=true` green is rendered with 0 replicas. The primary Service selector is also reset to `activeSlot` by every upgrade and flipped to green again by the cutover hook: after a successful cutover record the new state in your values (`activeSlot: green`) before the next release.
 - `bitnami/kubectl` no longer publishes pinned tags, so the default is `bitnamilegacy/kubectl:1.31` (`hooks.kubectlImage`).
-- The hook scripts are syntax-checked and the manifests are rendered in CI, but they were not executed on a live cluster.
+- **What was run on a real cluster** (kind, outside CI, Helm 3): `helm install` (blue 2/2, green 0/0, Service on blue), `helm upgrade` (green scaled up by the pre-upgrade hook, smoke test `pass`, cutover: Service on green, blue scaled to 0), `rollback.enabled=true` (blue back to 2/2, Service on blue, green 0) and a failing smoke test (`canary.tests.expectedStatus=418`: the upgrade fails in the cutover Job, green goes back to 0, the Service stays on blue). The first run found the replicas problem described above.
+- **What was not run:** real traffic through the NGINX canary Ingress (the weights are only checked as annotations), the PrometheusRule (the kind cluster has no Prometheus CRDs) and **a second normal upgrade after a cutover**. Helm reverts the live changes of the hooks (blue scaled to 0, Service on green), so such an upgrade scales blue up again and points the Service at it until the hooks switch back to green: expect a short window in which the Service selects blue pods that are still starting. A cleaner release cycle is to swap the roles in the values first (`blue.image.tag` = the version that is live now, `green.image.tag` = the new candidate, `activeSlot: blue`). Making the chart read the live state with `lookup` would remove the problem; it needs a cluster to test.
 
 ## Exercise: Cluster Autoscaler on EKS (`exercise-4-cluster-autoscaler/`)
 
